@@ -17,7 +17,8 @@ typedef struct {
     uint32_t fingerprint;
     uint32_t child;
     uint8_t chaincode[32];
-    uint8_t key[33];
+    uint8_t idk;
+    uint8_t key[32];
     uint8_t checksum[4];
 } __attribute__((packed)) serialized_hd_key_t;
 
@@ -65,6 +66,7 @@ bool my_sha256(void *digest, const void *data, size_t datasz) {
 }
 
 int main(int argc, char *argv[]) {
+
     while (argc--) {argv++;}
     b58_sha256_impl = my_sha256;
     const char *pw = getenv("PW");
@@ -79,9 +81,11 @@ int main(int argc, char *argv[]) {
         .fingerprint = 0,
         .child = 0,
         .chaincode = {0},
+        .idk = 0,
         .key = {0},
         .checksum = {0},
     } };
+    uint8_t wifkey[38] = {0};
     uint8_t checksum_hash_int[32];
     unsigned int checksum_len = sizeof(checksum_hash_int);
     char b58hdkey[256];
@@ -94,20 +98,28 @@ int main(int argc, char *argv[]) {
     HMAC(EVP_sha512(), seed, strlen(seed), dk, sizeof(dk), md, &md_len);
     printf("md: ");
     fprinthex(stdout, md, sizeof(md));
-    memcpy(binhdkey.ser.chaincode, md + 32, 32);
-    binhdkey.ser.key[0] = 0x00;
-    memcpy(binhdkey.ser.key + 1, md, 32);
+
+    memcpy(binhdkey.ser.chaincode, md + sizeof(binhdkey.ser.key), sizeof(binhdkey.ser.chaincode));
+    memcpy(binhdkey.ser.key, md, sizeof(binhdkey.ser.key));
     printf("binhdkey.packed: ");
     fprinthex(stdout, binhdkey.packed, sizeof(binhdkey.packed));
-   // SHA256(binhdkey.packed, sizeof(binhdkey.packed)-4, checksum_hash_int);
+
     EVP_Digest(binhdkey.packed, sizeof(binhdkey.packed)-4, checksum_hash_int, &checksum_len, EVP_sha256(), NULL);
-   // SHA256(checksum_hash_int, sizeof(checksum_hash_int), binhdkey.ser.checksum);
     EVP_Digest(checksum_hash_int, sizeof(checksum_hash_int), binhdkey.ser.checksum, &checksum_len, EVP_sha256(), NULL);
     printf("binhdkey.checksum: ");
     fprinthex(stdout, binhdkey.ser.checksum, sizeof(binhdkey.ser.checksum));
 
     b58enc(b58hdkey, &b58hdkeylen, binhdkey.packed, sizeof(binhdkey.packed));
-    printf("b58enc: %s\n", b58hdkey);
+    printf("b58enc ext priv masterkey: %s\n", b58hdkey);
+
+    wifkey[0] = 0x80;
+    wifkey[33] = 0x01;
+    memcpy(wifkey+1, binhdkey.ser.key, sizeof(binhdkey.ser.key));
+    EVP_Digest(wifkey, sizeof(wifkey)-4, checksum_hash_int, &checksum_len, EVP_sha256(), NULL);
+    EVP_Digest(checksum_hash_int, sizeof(checksum_hash_int), checksum_hash_int, &checksum_len, EVP_sha256(), NULL);
+    memcpy(wifkey + sizeof(wifkey) - 4, checksum_hash_int, 4);
+    b58enc(b58hdkey, &b58hdkeylen, wifkey, sizeof(wifkey));
+    printf("b58enc wifkey: %s\n", b58hdkey);
 
     return 0;
 }
