@@ -12,13 +12,13 @@ typedef union {
 } uint32_u;
 
 typedef struct {
-    uint32_u version;
+    uint8_t version[4];
     uint8_t depth;
-    uint32_u fingerprint;
-    uint32_u child;
+    uint32_t fingerprint;
+    uint32_t child;
     uint8_t chaincode[32];
     uint8_t key[33];
-    uint32_u checksum;
+    uint8_t checksum[4];
 } __attribute__((packed)) serialized_hd_key_t;
 
 typedef union {
@@ -74,13 +74,16 @@ int main(int argc, char *argv[]) {
     uint8_t md[EVP_MAX_MD_SIZE];
     unsigned int md_len;
     serialized_hd_key_u binhdkey = { .ser = {
-        .version = { .bytes = { 0x04, 0x88, 0xad, 0xe4 } }, // big-endian 'xprv'
+        .version = {0x04, 0x88, 0xad, 0xe4},
         .depth = 0x00,
-        .fingerprint = { .value = 0 },
-        .child = { .value = 0 }
+        .fingerprint = 0,
+        .child = 0,
+        .chaincode = {0},
+        .key = {0},
+        .checksum = {0},
     } };
     uint8_t checksum_hash_int[32];
-    uint8_t checksum_hash_final[32];
+    unsigned int checksum_len = sizeof(checksum_hash_int);
     char b58hdkey[256];
     size_t b58hdkeylen = sizeof(b58hdkey);
 
@@ -94,12 +97,14 @@ int main(int argc, char *argv[]) {
     memcpy(binhdkey.ser.chaincode, md + 32, 32);
     binhdkey.ser.key[0] = 0x00;
     memcpy(binhdkey.ser.key + 1, md, 32);
-
-    SHA256(binhdkey.packed, sizeof(binhdkey.packed), checksum_hash_int);
-    SHA256(checksum_hash_int, sizeof(checksum_hash_int), checksum_hash_final);
-    memcpy(binhdkey.ser.checksum.bytes, checksum_hash_final, 4);
-    printf("checksum_hash_final: ");
-    fprinthex(stdout, checksum_hash_final, sizeof(checksum_hash_final));
+    printf("binhdkey.packed: ");
+    fprinthex(stdout, binhdkey.packed, sizeof(binhdkey.packed));
+   // SHA256(binhdkey.packed, sizeof(binhdkey.packed)-4, checksum_hash_int);
+    EVP_Digest(binhdkey.packed, sizeof(binhdkey.packed)-4, checksum_hash_int, &checksum_len, EVP_sha256(), NULL);
+   // SHA256(checksum_hash_int, sizeof(checksum_hash_int), binhdkey.ser.checksum);
+    EVP_Digest(checksum_hash_int, sizeof(checksum_hash_int), binhdkey.ser.checksum, &checksum_len, EVP_sha256(), NULL);
+    printf("binhdkey.checksum: ");
+    fprinthex(stdout, binhdkey.ser.checksum, sizeof(binhdkey.ser.checksum));
 
     b58enc(b58hdkey, &b58hdkeylen, binhdkey.packed, sizeof(binhdkey.packed));
     printf("b58enc: %s\n", b58hdkey);
