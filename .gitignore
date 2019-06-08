@@ -35,3 +35,4 @@ testfastpbkdf2
 bench
 benchmulti
 openssl/
+bip32passwallet

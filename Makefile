@@ -9,6 +9,9 @@ LDLIBS += -lcrypto
 
 all: testfastpbkdf2 libfastpbkdf2.a bench benchmulti
 
+bip32passwallet: bip32.o libfastpbkdf2.a
+	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS) -lbase58
+
 testfastpbkdf2: fastpbkdf2.o testfastpbkdf2.o
 
 libfastpbkdf2.a: fastpbkdf2.o
@@ -25,4 +28,4 @@ runbench: bench benchmulti
 	./benchmulti
 
 clean:
-	rm -f *.o libfastpbkdf2.a testfastpbkdf2
+	rm -f *.o libfastpbkdf2.a testfastpbkdf2 bench benchmulti bip32passwallet
